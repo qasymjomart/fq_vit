@@ -42,7 +42,7 @@ parser.add_argument('--num-workers',
                     help='number of data loading workers (default: 16)')
 parser.add_argument('--device', default='cuda', type=str, help='device')
 parser.add_argument('--print-freq',
-                    default=100,
+                    default=10,
                     type=int,
                     help='print frequency')
 parser.add_argument('--seed', default=0, type=int, help='seed')
@@ -88,12 +88,13 @@ def main():
     device = torch.device(args.device)
     cfg = Config(args.ptf, args.lis, args.quant_method)
     model = str2model(args.model)(pretrained=False, cfg=cfg, num_classes=100)
+    # import ipdb; ipdb.set_trace()
     # load model saved as vit_cifar100.pth
     msg = model.load_state_dict(torch.load('vit_cifar100.pth', map_location=device))
     print(msg)
     print('Loaded model from vit_cifar100.pth')
     model = model.to(device)
-
+    
     # Note: Different models have different strategies of data preprocessing.
     model_type = args.model.split('_')[0]
     if model_type == 'deit':
@@ -226,6 +227,8 @@ def validate(args, val_loader, model, criterion, device):
 
     # switch to evaluate mode
     model.eval()
+    # for name, param in model.named_parameters():
+    #     print(name, param.dtype)
 
     val_start_time = end = time.time()
     for i, (data, target) in enumerate(val_loader):
@@ -235,7 +238,7 @@ def validate(args, val_loader, model, criterion, device):
         with torch.no_grad():
             output = model(data)
         loss = criterion(output, target)
-
+        
         # measure accuracy and record loss
         prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
         losses.update(loss.data.item(), data.size(0))
@@ -259,6 +262,16 @@ def validate(args, val_loader, model, criterion, device):
                       top1=top1,
                       top5=top5,
                   ))
+    
+    with torch.profiler.profile(activities=[
+                torch.profiler.ProfilerActivity.CPU,
+                torch.profiler.ProfilerActivity.CUDA,
+            ]
+        ) as prof:
+        model(data[:1])                
+    
+    print(prof.key_averages().table(sort_by="cuda_time_total"))
+    
     val_end_time = time.time()
     print(' * Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f} Time {time:.3f}'.
           format(top1=top1, top5=top5, time=val_end_time - val_start_time))

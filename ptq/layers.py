@@ -52,6 +52,12 @@ class QConv2d(nn.Conv2d):
         self.quantizer = build_quantizer(self.quantizer_str, self.bit_type,
                                          self.observer, self.module_type)
         
+        self.q_weight = None
+    
+    def set_quant(self, quant=True):
+        self.quant = quant
+        if quant:
+            self.q_weight = self.quantizer(self.weight)        
     
     def forward(self, x):
         if self.calibrate:
@@ -60,6 +66,9 @@ class QConv2d(nn.Conv2d):
                 self.quantizer.update_quantization_params()
         if not self.quant:
             return F.conv2d(x, self.weight, self.bias, self.stride,
+                            self.padding, self.dilation, self.groups)
+        if self.quant and self.q_weight is not None:
+            return F.conv2d(x, self.q_weight, self.bias, self.stride,
                             self.padding, self.dilation, self.groups)
         weight = self.quantizer(self.weight)
         return F.conv2d(x, weight, self.bias, self.stride, self.padding,
@@ -99,7 +108,12 @@ class QLinear(nn.Linear):
                                        self.bit_type, self.calibration_mode)
         self.quantizer = build_quantizer(self.quantizer_str, self.bit_type,
                                          self.observer, self.module_type)
+        self.q_weight = None
         
+    def set_quant(self, quant=True):
+        self.quant = quant
+        if quant:
+            self.q_weight = self.quantizer(self.weight)
     
     def forward(self, x):
         if self.calibrate:
@@ -108,6 +122,8 @@ class QLinear(nn.Linear):
                 self.quantizer.update_quantization_params()
         if not self.quant:
             return F.linear(x, self.weight, self.bias)
+        if self.quant and self.q_weight is not None:
+            return F.linear(x, self.q_weight, self.bias)
         weight = self.quantizer(self.weight)
         return F.linear(x, weight, self.bias)
 

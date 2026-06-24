@@ -355,6 +355,8 @@ class VisionTransformer(nn.Module):
         for m in self.modules():
             if type(m) in [QConv2d, QLinear, QAct, QIntSoftmax]:
                 m.quant = True
+                if type(m) in [QConv2d, QLinear]:
+                    m.set_quant()
             if self.cfg.INT_NORM:
                 if type(m) in [QIntLayerNorm]:
                     m.mode = 'int'
